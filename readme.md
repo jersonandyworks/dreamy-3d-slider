@@ -10,8 +10,6 @@ This project features a clean 3D carousel-style slider where items rotate in 3D 
 
 ![Dreamy 3D Slider Preview](./screenshot.png)
 
-> _(Replace `preview.png` with your actual screenshot or GIF.)_
-
 ---
 
 ## 🚀 Features
