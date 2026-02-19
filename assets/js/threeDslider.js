@@ -116,12 +116,16 @@
 		50,
 		container.clientWidth / container.clientHeight,
 		0.1,
-		100
+		100,
 	);
 	camera.position.set(0, 0.8, 10);
 	camera.lookAt(0, 0, 0);
 
-	var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+	var renderer = new THREE.WebGLRenderer({
+		canvas: canvas,
+		antialias: true,
+		alpha: true,
+	});
 	renderer.setClearColor(0x000000, 0);
 	renderer.setSize(container.clientWidth, container.clientHeight);
 	renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -262,7 +266,7 @@
 			s.tz = (Math.cos(angle) - 1) * ARC_RADIUS;
 			s.try_ = angle;
 
-			s.tscl = Math.max(0.7, 1.0 - absOff * 0.12);
+			s.tscl = Math.max(0.3, 1.0 - absOff * 0.35);
 			s.tblur = Math.min(absOff * BLUR_MULT, 2.0);
 			s.tbright = Math.max(BRIGHT_MIN, 1.0 - absOff * 0.3);
 			s.topacity = Math.max(OPACITY_MIN, 1.0 - absOff * 0.2);
@@ -403,7 +407,7 @@
 			e.preventDefault();
 			onPointerDown(e.touches[0].clientX);
 		},
-		{ passive: false }
+		{ passive: false },
 	);
 
 	window.addEventListener(
@@ -413,7 +417,7 @@
 				onPointerMove(e.touches[0].clientX);
 			}
 		},
-		{ passive: true }
+		{ passive: true },
 	);
 
 	window.addEventListener("touchend", onPointerUp);
@@ -457,7 +461,7 @@
 			if (e.deltaY > 0 || e.deltaX > 0) goTo(currentIndex + 1);
 			else goTo(currentIndex - 1);
 		},
-		{ passive: false }
+		{ passive: false },
 	);
 
 	function createDots() {
