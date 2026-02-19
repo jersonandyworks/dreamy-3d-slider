@@ -9,6 +9,7 @@
 	-webkit-user-select: none;
 	overflow: hidden;
 	background: transparent;
+	transform: translateY(-175px);
 }
 
 .innotech-3ds-container.dragging {
@@ -66,7 +67,9 @@
 	margin: 0 0 8px 0;
 	color: #fff;
 	font-family: Arial, Helvetica, sans-serif;
-	transition: opacity 0.4s ease, transform 0.4s ease;
+	transition:
+		opacity 0.4s ease,
+		transform 0.4s ease;
 }
 
 .innotech-3ds-subtitle {
@@ -75,7 +78,9 @@
 	letter-spacing: 0.3px;
 	margin: 0 0 28px 0;
 	font-family: Arial, Helvetica, sans-serif;
-	transition: opacity 0.4s ease 0.1s, transform 0.4s ease 0.1s;
+	transition:
+		opacity 0.4s ease 0.1s,
+		transform 0.4s ease 0.1s;
 }
 
 /* ── Navigation Dots ── */
