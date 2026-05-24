@@ -44,6 +44,44 @@
 		$(this).hide();
 	});
 
+	// WP Media uploader for GLB 3D models
+	$(document).on("click", ".upload-model", function (e) {
+		e.preventDefault();
+		var slideItem = $(this).closest(".slide-item");
+		var frame = wp.media({
+			title: "Select 3D Model (.glb)",
+			button: { text: "Use this model" },
+			multiple: false,
+			library: { type: ["model/gltf-binary", "application/octet-stream"] },
+		});
+
+		frame.on("select", function () {
+			var attachment = frame.state().get("selection").first().toJSON();
+			var url = attachment.url || "";
+			var name = url.split("/").pop();
+			if (!/\.glb$/i.test(name)) {
+				alert("Please select a .glb file.");
+				return;
+			}
+			slideItem.find(".slide-model-url").val(url);
+			slideItem.find(".model-preview").text(name);
+			slideItem.find(".remove-model").show();
+		});
+
+		frame.open();
+	});
+
+	// Remove 3D model
+	$(document).on("click", ".remove-model", function (e) {
+		e.preventDefault();
+		var slideItem = $(this).closest(".slide-item");
+		slideItem.find(".slide-model-url").val("");
+		slideItem
+			.find(".model-preview")
+			.html("<em>No 3D model — default will be used</em>");
+		$(this).hide();
+	});
+
 	// Remove slide
 	$(document).on("click", ".remove-slide", function () {
 		var count = $(".slide-item").length;
@@ -83,6 +121,14 @@
 			'<button type="button" class="button upload-image">Upload Image</button>' +
 			'<button type="button" class="button remove-image" style="display:none">Remove</button>' +
 			"</div>" +
+			'<div class="slide-model-field">' +
+			'<div class="model-preview"><em>No 3D model — default will be used</em></div>' +
+			'<input type="hidden" name="slides[' +
+			idx +
+			'][model_url]" class="slide-model-url" value="" />' +
+			'<button type="button" class="button upload-model">Upload 3D Model (.glb)</button>' +
+			'<button type="button" class="button remove-model" style="display:none">Remove</button>' +
+			"</div>" +
 			'<div class="slide-text-fields">' +
 			"<label>Title" +
 			'<input type="text" name="slides[' +
@@ -94,11 +140,129 @@
 			idx +
 			'][subtitle]" value="" placeholder="Slide subtitle" />' +
 			"</label>" +
+			"<label>Learn More Link <small>(optional)</small>" +
+			'<span class="slide-link-wrap">' +
+			'<input type="url" class="slide-link-url" name="slides[' +
+			idx +
+			'][link_url]" value="" placeholder="https://… or pick a page/post" />' +
+			'<button type="button" class="button link-picker-btn" title="Choose page or post" aria-label="Choose page or post"><span class="dashicons dashicons-admin-links"></span></button>' +
+			"</span>" +
+			"</label>" +
 			"</div>" +
 			"</div>" +
 			"</div>";
 
 		$("#slides-repeater").append(html);
+	});
+
+	// ── Link picker modal ──────────────────────────────────────
+	var $modal = null;
+	var $list = null;
+	var $search = null;
+	var targetInput = null;
+	var searchTimer = null;
+
+	function getModal() {
+		if (!$modal) {
+			$modal = $("#innotech-3ds-linkmodal");
+			$list = $("#innotech-3ds-link-list");
+			$search = $("#innotech-3ds-link-search");
+		}
+		return $modal;
+	}
+
+	function openModal(input) {
+		targetInput = input;
+		getModal().show();
+		$search.val("").trigger("focus");
+		fetchLinks("");
+	}
+
+	function closeModal() {
+		if ($modal) $modal.hide();
+		targetInput = null;
+	}
+
+	function fetchLinks(term) {
+		if (typeof innotech3DSAdmin === "undefined") {
+			$list.html(
+				'<p class="innotech-3ds-link-empty">Config missing.</p>'
+			);
+			return;
+		}
+		$list.html('<p class="innotech-3ds-link-empty">Loading…</p>');
+		$.ajax({
+			url: innotech3DSAdmin.ajaxUrl,
+			method: "GET",
+			data: {
+				action: "innotech_3ds_get_links",
+				nonce: innotech3DSAdmin.nonce,
+				search: term,
+			},
+		})
+			.done(function (resp) {
+				if (!resp || !resp.success || !resp.data || !resp.data.length) {
+					$list.html(
+						'<p class="innotech-3ds-link-empty">No pages or posts found.</p>'
+					);
+					return;
+				}
+				var html = "";
+				resp.data.forEach(function (item) {
+					html +=
+						'<button type="button" class="innotech-3ds-link-item" data-url="' +
+						$("<div>").text(item.url).html() +
+						'">' +
+						'<span class="innotech-3ds-link-title">' +
+						$("<div>").text(item.title).html() +
+						"</span>" +
+						'<span class="innotech-3ds-link-type">' +
+						item.type +
+						"</span>" +
+						"</button>";
+				});
+				$list.html(html);
+			})
+			.fail(function () {
+				$list.html(
+					'<p class="innotech-3ds-link-empty">Request failed.</p>'
+				);
+			});
+	}
+
+	$(document).on("click", ".link-picker-btn", function (e) {
+		e.preventDefault();
+		var input = $(this)
+			.closest(".slide-link-wrap")
+			.find(".slide-link-url")
+			.get(0);
+		openModal(input);
+	});
+
+	$(document).on(
+		"click",
+		".innotech-3ds-linkmodal-close, .innotech-3ds-linkmodal-backdrop",
+		function () {
+			closeModal();
+		}
+	);
+
+	$(document).on("click", ".innotech-3ds-link-item", function () {
+		var url = $(this).attr("data-url");
+		if (targetInput) $(targetInput).val(url);
+		closeModal();
+	});
+
+	$(document).on("input", "#innotech-3ds-link-search", function () {
+		var term = $(this).val();
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(function () {
+			fetchLinks(term);
+		}, 300);
+	});
+
+	$(document).on("keydown", function (e) {
+		if (e.key === "Escape" && $modal && $modal.is(":visible")) closeModal();
 	});
 
 	function reindexSlides() {
@@ -110,6 +274,12 @@
 			$(this)
 				.find(".slide-image-url")
 				.attr("name", "slides[" + i + "][image_url]");
+			$(this)
+				.find(".slide-model-url")
+				.attr("name", "slides[" + i + "][model_url]");
+			$(this)
+				.find(".slide-link-url")
+				.attr("name", "slides[" + i + "][link_url]");
 			$(this)
 				.find('input[type="text"]')
 				.each(function () {

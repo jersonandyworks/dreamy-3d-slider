@@ -57,9 +57,9 @@ class Innotech_3D_Slider_DB {
 	public static function get_defaults() {
 		return array(
 			'slides_data'      => array(
-				array( 'image_url' => '', 'title' => 'Predictive Maintenance', 'subtitle' => 'Anticipate failures before they happen' ),
-				array( 'image_url' => '', 'title' => 'Corrosion Management', 'subtitle' => 'Real-time corrosion risk monitoring' ),
-				array( 'image_url' => '', 'title' => 'Asset Monitoring', 'subtitle' => 'Smart insights for critical assets' ),
+				array( 'image_url' => '', 'model_url' => '', 'link_url' => '', 'title' => 'Predictive Maintenance', 'subtitle' => 'Anticipate failures before they happen' ),
+				array( 'image_url' => '', 'model_url' => '', 'link_url' => '', 'title' => 'Corrosion Management', 'subtitle' => 'Real-time corrosion risk monitoring' ),
+				array( 'image_url' => '', 'model_url' => '', 'link_url' => '', 'title' => 'Asset Monitoring', 'subtitle' => 'Smart insights for critical assets' ),
 			),
 			'card_max'         => '4.5',
 			'corner_radius'    => '0.06',

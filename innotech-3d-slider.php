@@ -28,3 +28,33 @@ if ( is_admin() ) {
 }
 
 new Innotech_3D_Slider_Frontend();
+
+// Allow .glb uploads in WP media library.
+add_filter( 'upload_mimes', function ( $mimes ) {
+	$mimes['glb']  = 'model/gltf-binary';
+	$mimes['gltf'] = 'model/gltf+json';
+	return $mimes;
+} );
+
+add_filter( 'wp_check_filetype_and_ext', function ( $data, $file, $filename, $mimes ) {
+	if ( ! empty( $data['ext'] ) && ! empty( $data['type'] ) ) {
+		return $data;
+	}
+	$ext = strtolower( pathinfo( $filename, PATHINFO_EXTENSION ) );
+	if ( 'glb' === $ext ) {
+		$data['ext']  = 'glb';
+		$data['type'] = 'model/gltf-binary';
+	} elseif ( 'gltf' === $ext ) {
+		$data['ext']  = 'gltf';
+		$data['type'] = 'model/gltf+json';
+	}
+	return $data;
+}, 10, 4 );
+
+// Tag plugin JS as module (only the real src tag, not inline data scripts).
+add_filter( 'script_loader_tag', function ( $tag, $handle, $src ) {
+	if ( 'innotech-3ds-glb-js' === $handle && ! empty( $src ) ) {
+		return '<script type="module" src="' . esc_url( $src ) . '" id="innotech-3ds-glb-js"></script>' . "\n";
+	}
+	return $tag;
+}, 10, 3 );

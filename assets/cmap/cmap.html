@@ -1,0 +1,382 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>CMAP 3D Circular Carousel</title>
+<style>
+  :root {
+    --bg: #0b0f14;
+    --panel: #121821;
+    --accent: #4ad6ff;
+    --text: #e6edf3;
+    --muted: #8aa0b4;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+  h1 { margin: 0 0 8px; font-size: 24px; }
+  .sub { margin: 0 0 24px; color: var(--muted); font-size: 14px; }
+
+  .stage { position: relative; border-radius: 14px; background: radial-gradient(circle at 50% 60%, #1a2230 0%, #0b0f14 70%); box-shadow: 0 10px 40px rgba(0,0,0,.4); overflow: hidden; aspect-ratio: 16/9; min-height: 520px; }
+  .stage canvas { display: block; width: 100% !important; height: 100% !important; cursor: grab; outline: none; }
+  .stage canvas:active { cursor: grabbing; }
+
+  .focus-label { position: absolute; top: 18px; left: 50%; transform: translateX(-50%); padding: 8px 18px; background: rgba(0,0,0,.55); border: 1px solid rgba(74,214,255,.3); border-radius: 999px; font-size: 14px; letter-spacing: .5px; backdrop-filter: blur(8px); z-index: 3; transition: opacity .3s; }
+  .zoom-label { position: absolute; top: 18px; right: 18px; padding: 6px 12px; background: rgba(0,0,0,.55); border: 1px solid rgba(255,255,255,.12); border-radius: 8px; font-size: 12px; font-family: ui-monospace, Menlo, monospace; letter-spacing: .3px; backdrop-filter: blur(8px); z-index: 3; color: var(--accent); }
+
+  .loading { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 14px; pointer-events: none; z-index: 2; }
+  .loading.hide { display: none; }
+
+  .nav { position: absolute; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; border-radius: 50%; background: rgba(0,0,0,.5); color: var(--text); border: 1px solid rgba(255,255,255,.12); display: flex; align-items: center; justify-content: center; cursor: pointer; transition: background .2s, transform .2s; z-index: 5; }
+  .nav:hover { background: rgba(74,214,255,.2); transform: translateY(-50%) scale(1.05); }
+  .nav.prev { left: 18px; }
+  .nav.next { right: 18px; }
+  .nav svg { width: 22px; height: 22px; }
+
+  .dots { display: flex; gap: 10px; justify-content: center; margin-top: 18px; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: #2a3340; border: 0; cursor: pointer; transition: background .2s, transform .2s; padding: 0; }
+  .dot.active { background: var(--accent); transform: scale(1.3); }
+
+  .hint { text-align: center; margin-top: 14px; color: var(--muted); font-size: 12px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>CMAP 3D Circular Carousel</h1>
+  <p class="sub">Drag horizontally to spin the ring. Click arrows or dots to snap to a model.</p>
+
+  <div class="stage" id="stage">
+    <canvas id="cv"></canvas>
+    <div class="focus-label" id="focusLabel">CMAP Box</div>
+    <div class="zoom-label" id="zoomLabel">Zoom: 100%</div>
+    <div class="loading" id="loading">Loading models…</div>
+
+    <button class="nav prev" id="prev" aria-label="Previous">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </button>
+    <button class="nav next" id="next" aria-label="Next">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
+
+  <div class="dots" id="dots"></div>
+  <p class="hint">Drag horizontally to spin · Drag vertically to tilt · Scroll to zoom · Arrow keys · Buttons · Dots</p>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+const MODELS = [
+  { file: 'cmap_box.glb',     label: 'CMAP Box' },
+  { file: 'cmap_sensor1.glb', label: 'CMAP Sensor 1' },
+  { file: 'cmap_sensor2.glb', label: 'CMAP Sensor 2' },
+  { file: 'sense.glb',        label: 'Sense' },
+];
+
+const canvas = document.getElementById('cv');
+const loadingEl = document.getElementById('loading');
+const focusLabel = document.getElementById('focusLabel');
+const zoomLabel = document.getElementById('zoomLabel');
+const prevBtn = document.getElementById('prev');
+const nextBtn = document.getElementById('next');
+const dotsWrap = document.getElementById('dots');
+
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.6;
+
+const scene = new THREE.Scene();
+scene.background = null;
+
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(50, 1, 0.01, 5000);
+const CAM_MIN = 1.5;
+const CAM_MAX = 14;
+let camDist = 5.0;
+let camDistTarget = camDist;
+const camTarget = new THREE.Vector3(0, 0, 0);
+
+// Vertical pitch (orbit around target). 0 = horizontal, +π/2 = looking from top.
+const PITCH_MIN = -Math.PI / 3;   // -60° (looking up from below)
+const PITCH_MAX =  Math.PI / 2.5; // ~72° (looking down)
+let camPitch = 0.22;              // slight downward tilt by default
+let camPitchTarget = camPitch;
+
+function applyCameraTransform() {
+  const x = 0;
+  const y = Math.sin(camPitch) * camDist;
+  const z = Math.cos(camPitch) * camDist;
+  camera.position.set(x, y, z);
+  camera.lookAt(camTarget);
+}
+applyCameraTransform();
+
+// Lights
+scene.add(new THREE.AmbientLight(0xffffff, 0.8));
+const top = new THREE.DirectionalLight(0xffffff, 3.0); top.position.set(0, 10, 0); scene.add(top);
+const key = new THREE.DirectionalLight(0xffffff, 2.5); key.position.set(5, 8, 6); scene.add(key);
+const fill = new THREE.DirectionalLight(0xbfd6ff, 0.8); fill.position.set(-4, 2, -3); scene.add(fill);
+const rim = new THREE.DirectionalLight(0xffffff, 0.6); rim.position.set(0, 3, -8); scene.add(rim);
+scene.add(new THREE.HemisphereLight(0xffffff, 0x444466, 0.6));
+const bottomA = new THREE.DirectionalLight(0xffffff, 1.2); bottomA.position.set(0, -10, 0); scene.add(bottomA);
+const bottomB = new THREE.DirectionalLight(0xffe6cc, 0.5); bottomB.position.set(4, -6, 4); scene.add(bottomB);
+const bottomC = new THREE.DirectionalLight(0xccddff, 0.5); bottomC.position.set(-4, -6, -4); scene.add(bottomC);
+
+// Ring container — spinning this rotates carousel
+const ring = new THREE.Group();
+scene.add(ring);
+
+const SLOT_COUNT = MODELS.length;
+const SLOT_ANGLE = (Math.PI * 2) / SLOT_COUNT; // 90°
+// Front slot at angle 0 — place each model evenly around ring.
+// Front is at +Z (toward camera). Slot offset angle = i * SLOT_ANGLE.
+// When ring.rotation.y = -i*SLOT_ANGLE, slot i is at front.
+
+const RING_RADIUS = 1.9;
+const MODEL_DISPLAY_SIZE = 1.0; // bounding-diagonal target so 4 fit without overlap
+
+const slots = []; // { pivot, model, label, baseScale }
+
+// Build a normalized wrapper: model centered at origin, scaled to targetSize.
+// Returns { wrap, baseScale }. Caller adds `wrap` to its parent.
+function buildCenteredModel(gltfScene, targetSize, name) {
+  gltfScene.updateMatrixWorld(true);
+
+  // Walk meshes, union geometry bboxes transformed by world matrices.
+  const box = new THREE.Box3();
+  let hasMesh = false;
+  gltfScene.traverse((c) => {
+    if (c.isMesh && c.geometry) {
+      if (!c.geometry.boundingBox) c.geometry.computeBoundingBox();
+      const b = c.geometry.boundingBox.clone().applyMatrix4(c.matrixWorld);
+      if (!hasMesh) { box.copy(b); hasMesh = true; }
+      else box.union(b);
+    }
+  });
+  if (!hasMesh) box.setFromObject(gltfScene);
+
+  const sizeVec = box.getSize(new THREE.Vector3());
+  const size = sizeVec.length() || 1;
+  const center = box.getCenter(new THREE.Vector3());
+  const s = targetSize / size;
+
+  // Shift model so its bbox-center sits at (0,0,0) of the wrapper, then scale wrapper.
+  gltfScene.position.sub(center);
+
+  const wrap = new THREE.Group();
+  wrap.add(gltfScene);
+  wrap.scale.setScalar(s);
+
+  console.log(`[${name}] bbox size=${size.toFixed(3)} ext=(${sizeVec.x.toFixed(2)},${sizeVec.y.toFixed(2)},${sizeVec.z.toFixed(2)}) scale=${s.toFixed(4)}`);
+  return { wrap, baseScale: s };
+}
+
+const loader = new GLTFLoader();
+let loadedCount = 0;
+
+MODELS.forEach((m, i) => {
+  // Pivot lets the model self-rotate independently of ring
+  const pivot = new THREE.Group();
+  const angle = i * SLOT_ANGLE;
+  pivot.position.set(Math.sin(angle) * RING_RADIUS, 0, Math.cos(angle) * RING_RADIUS);
+  pivot.rotation.y = angle; // face outward (toward camera when in front slot)
+  ring.add(pivot);
+
+  slots.push({ pivot, model: null, label: m.label, baseScale: 1, angle });
+
+  loader.load(
+    m.file,
+    (gltf) => {
+      const { wrap, baseScale } = buildCenteredModel(gltf.scene, MODEL_DISPLAY_SIZE, m.file);
+      pivot.add(wrap);
+      slots[i].model = wrap; // wrap is what we scale/rotate per-slot
+      slots[i].baseScale = baseScale;
+      loadedCount++;
+      updateActiveScales();
+      if (loadedCount === MODELS.length) loadingEl.classList.add('hide');
+    },
+    (xhr) => {
+      if (xhr.total) console.log(`[${m.file}] ${((xhr.loaded / xhr.total) * 100).toFixed(0)}%`);
+    },
+    (err) => {
+      console.error('Load failed:', m.file, err);
+      loadingEl.textContent = `Failed: ${m.file}`;
+    }
+  );
+});
+
+// Dots
+MODELS.forEach((m, i) => {
+  const dot = document.createElement('button');
+  dot.className = 'dot' + (i === 0 ? ' active' : '');
+  dot.setAttribute('aria-label', `Focus ${m.label}`);
+  dot.addEventListener('click', () => snapTo(i));
+  dotsWrap.appendChild(dot);
+});
+
+let activeIdx = 0;
+let ringYaw = 0;       // current ring rotation
+let targetYaw = 0;     // animated toward
+let dragging = false;
+let lastX = 0;
+let lastY = 0;
+let dragVel = 0;
+let lastDragTime = 0;
+let userDragging = false;
+
+function snapTo(i) {
+  activeIdx = ((i % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT;
+  // Choose nearest multiple of SLOT_ANGLE to current yaw
+  const desired = -activeIdx * SLOT_ANGLE;
+  // Wrap so we always rotate shortest way
+  let diff = desired - ringYaw;
+  diff = ((diff + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  targetYaw = ringYaw + diff;
+  updateUI();
+}
+
+function updateUI() {
+  focusLabel.textContent = MODELS[activeIdx].label;
+  [...dotsWrap.children].forEach((d, k) => d.classList.toggle('active', k === activeIdx));
+  updateActiveScales();
+}
+
+function updateActiveScales() {
+  slots.forEach((s, i) => {
+    if (!s.model) return;
+    const target = i === activeIdx ? 1.25 : 0.9;
+    s.model.userData.scaleTarget = s.baseScale * target;
+  });
+}
+
+function nearestSlotFromYaw(y) {
+  // y close to -i*SLOT_ANGLE means slot i in front
+  const raw = -y / SLOT_ANGLE;
+  const idx = Math.round(raw);
+  return ((idx % SLOT_COUNT) + SLOT_COUNT) % SLOT_COUNT;
+}
+
+prevBtn.addEventListener('click', () => snapTo(activeIdx - 1));
+nextBtn.addEventListener('click', () => snapTo(activeIdx + 1));
+window.addEventListener('keydown', (e) => {
+  if (e.key === 'ArrowLeft') snapTo(activeIdx - 1);
+  if (e.key === 'ArrowRight') snapTo(activeIdx + 1);
+});
+
+// Pointer drag — horizontal = rotate ring, vertical = orbit pitch
+canvas.addEventListener('pointerdown', (e) => {
+  dragging = true; userDragging = true;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  lastDragTime = performance.now();
+  dragVel = 0;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!dragging) return;
+  const dx = e.clientX - lastX;
+  const dy = e.clientY - lastY;
+  lastX = e.clientX;
+  lastY = e.clientY;
+  const now = performance.now();
+  const dt = Math.max(1, now - lastDragTime);
+  lastDragTime = now;
+
+  const rotSpeed = 0.008;   // radians per pixel (horizontal)
+  const pitchSpeed = 0.006; // radians per pixel (vertical)
+  ringYaw += dx * rotSpeed;
+  targetYaw = ringYaw;
+  camPitch = Math.max(PITCH_MIN, Math.min(PITCH_MAX, camPitch + dy * pitchSpeed));
+  camPitchTarget = camPitch;
+  dragVel = (dx * rotSpeed) / (dt / 16.67);
+});
+function endDrag(e) {
+  if (!dragging) return;
+  dragging = false;
+  userDragging = false;
+  // Snap to nearest slot
+  const idx = nearestSlotFromYaw(ringYaw + dragVel * 6); // small flick lookahead
+  snapTo(idx);
+}
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+canvas.addEventListener('pointerleave', endDrag);
+
+// Scroll wheel = zoom (dolly camera)
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const zoomStep = camDistTarget * 0.12;
+  camDistTarget += (e.deltaY > 0 ? zoomStep : -zoomStep);
+  camDistTarget = Math.max(CAM_MIN, Math.min(CAM_MAX, camDistTarget));
+}, { passive: false });
+
+// Resize
+function resize() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  if (!w || !h) return;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas);
+resize();
+
+// Animation loop
+const clock = new THREE.Clock();
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(clock.getDelta(), 0.05);
+
+  // Smooth ring rotation toward target
+  if (!dragging) {
+    ringYaw += (targetYaw - ringYaw) * Math.min(1, dt * 8);
+  }
+  ring.rotation.y = ringYaw;
+
+  // Smooth camera zoom + pitch — keep look target locked at origin
+  camDist += (camDistTarget - camDist) * Math.min(1, dt * 8);
+  camPitch += (camPitchTarget - camPitch) * Math.min(1, dt * 8);
+  applyCameraTransform();
+
+  // Zoom % — default camDist=5.0 → 100%, closer = bigger %
+  const zoomPct = Math.round((5.0 / camDist) * 100);
+  const pitchDeg = (camPitch * 180 / Math.PI).toFixed(1);
+  zoomLabel.textContent = `Zoom: ${zoomPct}% | Pitch: ${pitchDeg}°`;
+
+  // Idle self-rotation of focused model + lerp scales/opacity
+  slots.forEach((s, i) => {
+    if (!s.model) return;
+    if (i === activeIdx && !dragging) {
+      s.model.rotation.y += dt * 0.4;
+    }
+    const t = s.model.userData.scaleTarget;
+    if (t !== undefined) {
+      const cur = s.model.scale.x;
+      const next = cur + (t - cur) * Math.min(1, dt * 6);
+      s.model.scale.setScalar(next);
+    }
+  });
+
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body>
+</html>

@@ -9,6 +9,41 @@ class Innotech_3D_Slider_Admin {
 		add_action( 'admin_menu', array( $this, 'add_menu_page' ) );
 		add_action( 'admin_enqueue_scripts', array( $this, 'enqueue_admin_assets' ) );
 		add_action( 'admin_init', array( $this, 'handle_save' ) );
+		add_action( 'wp_ajax_innotech_3ds_get_links', array( $this, 'ajax_get_links' ) );
+	}
+
+	public function ajax_get_links() {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_send_json_error( 'forbidden', 403 );
+		}
+		check_ajax_referer( 'innotech_3ds_links', 'nonce' );
+
+		$search = isset( $_GET['search'] ) ? sanitize_text_field( wp_unslash( $_GET['search'] ) ) : '';
+
+		$query_args = array(
+			'post_type'      => array( 'post', 'page' ),
+			'post_status'    => 'publish',
+			'posts_per_page' => 50,
+			'orderby'        => 'title',
+			'order'          => 'ASC',
+		);
+		if ( $search ) {
+			$query_args['s'] = $search;
+		}
+
+		$items = array();
+		$query = new WP_Query( $query_args );
+		foreach ( $query->posts as $post ) {
+			$items[] = array(
+				'id'    => $post->ID,
+				'title' => get_the_title( $post ) ? get_the_title( $post ) : '(no title)',
+				'url'   => get_permalink( $post ),
+				'type'  => get_post_type( $post ),
+			);
+		}
+		wp_reset_postdata();
+
+		wp_send_json_success( $items );
 	}
 
 	public function add_menu_page() {
@@ -40,6 +75,14 @@ class Innotech_3D_Slider_Admin {
 			INNOTECH_3DS_VERSION,
 			true
 		);
+		wp_localize_script(
+			'innotech-3ds-admin-js',
+			'innotech3DSAdmin',
+			array(
+				'ajaxUrl' => admin_url( 'admin-ajax.php' ),
+				'nonce'   => wp_create_nonce( 'innotech_3ds_links' ),
+			)
+		);
 	}
 
 	public function handle_save() {
@@ -64,6 +107,8 @@ class Innotech_3D_Slider_Admin {
 				if ( $count >= 6 ) break;
 				$slides[] = array(
 					'image_url' => isset( $slide['image_url'] ) ? esc_url_raw( $slide['image_url'] ) : '',
+					'model_url' => isset( $slide['model_url'] ) ? esc_url_raw( $slide['model_url'] ) : '',
+					'link_url'  => isset( $slide['link_url'] ) ? esc_url_raw( $slide['link_url'] ) : '',
 					'title'     => isset( $slide['title'] ) ? sanitize_text_field( $slide['title'] ) : '',
 					'subtitle'  => isset( $slide['subtitle'] ) ? sanitize_text_field( $slide['subtitle'] ) : '',
 				);
@@ -152,9 +197,12 @@ class Innotech_3D_Slider_Admin {
 					<div id="slides-repeater">
 						<?php
 						if ( empty( $slides ) ) {
-							$slides = array( array( 'image_url' => '', 'title' => '', 'subtitle' => '' ) );
+							$slides = array( array( 'image_url' => '', 'model_url' => '', 'link_url' => '', 'title' => '', 'subtitle' => '' ) );
 						}
 						foreach ( $slides as $i => $slide ) :
+							$model_url = isset( $slide['model_url'] ) ? $slide['model_url'] : '';
+							$model_name = $model_url ? basename( wp_parse_url( $model_url, PHP_URL_PATH ) ) : '';
+							$link_url   = isset( $slide['link_url'] ) ? $slide['link_url'] : '';
 						?>
 						<div class="slide-item" data-index="<?php echo $i; ?>">
 							<div class="slide-header">
@@ -172,12 +220,24 @@ class Innotech_3D_Slider_Admin {
 									<button type="button" class="button upload-image">Upload Image</button>
 									<button type="button" class="button remove-image" <?php echo empty( $slide['image_url'] ) ? 'style="display:none"' : ''; ?>>Remove</button>
 								</div>
+								<div class="slide-model-field">
+									<div class="model-preview"><?php echo $model_name ? esc_html( $model_name ) : '<em>No 3D model — default will be used</em>'; ?></div>
+									<input type="hidden" name="slides[<?php echo $i; ?>][model_url]" class="slide-model-url" value="<?php echo esc_attr( $model_url ); ?>" />
+									<button type="button" class="button upload-model">Upload 3D Model (.glb)</button>
+									<button type="button" class="button remove-model" <?php echo empty( $model_url ) ? 'style="display:none"' : ''; ?>>Remove</button>
+								</div>
 								<div class="slide-text-fields">
 									<label>Title
 										<input type="text" name="slides[<?php echo $i; ?>][title]" value="<?php echo esc_attr( $slide['title'] ); ?>" placeholder="Slide title" />
 									</label>
 									<label>Subtitle
 										<input type="text" name="slides[<?php echo $i; ?>][subtitle]" value="<?php echo esc_attr( $slide['subtitle'] ); ?>" placeholder="Slide subtitle" />
+									</label>
+									<label>Learn More Link <small>(optional)</small>
+										<span class="slide-link-wrap">
+											<input type="url" class="slide-link-url" name="slides[<?php echo $i; ?>][link_url]" value="<?php echo esc_attr( $link_url ); ?>" placeholder="https://… or pick a page/post" />
+											<button type="button" class="button link-picker-btn" title="Choose page or post" aria-label="Choose page or post"><span class="dashicons dashicons-admin-links"></span></button>
+										</span>
 									</label>
 								</div>
 							</div>
@@ -301,6 +361,23 @@ class Innotech_3D_Slider_Admin {
 					<input type="submit" name="innotech_3ds_save" class="button-primary" value="Save Settings" />
 				</p>
 			</form>
+
+			<!-- Link picker modal -->
+			<div class="innotech-3ds-linkmodal" id="innotech-3ds-linkmodal" style="display:none;">
+				<div class="innotech-3ds-linkmodal-backdrop"></div>
+				<div class="innotech-3ds-linkmodal-box">
+					<div class="innotech-3ds-linkmodal-head">
+						<h3>Select Page or Post</h3>
+						<button type="button" class="innotech-3ds-linkmodal-close" aria-label="Close">&times;</button>
+					</div>
+					<div class="innotech-3ds-linkmodal-search">
+						<input type="search" id="innotech-3ds-link-search" placeholder="Search pages and posts…" />
+					</div>
+					<div class="innotech-3ds-linkmodal-list" id="innotech-3ds-link-list">
+						<p class="innotech-3ds-link-empty">Loading…</p>
+					</div>
+				</div>
+			</div>
 		</div>
 		<?php
 	}

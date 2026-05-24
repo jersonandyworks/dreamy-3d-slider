@@ -83,6 +83,40 @@
 		transform 0.4s ease 0.1s;
 }
 
+/* ── Learn More button ── */
+.innotech-3ds-learnmore {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	pointer-events: auto;
+	margin: 0 0 24px 0;
+	padding: 12px 28px;
+	border: 1px solid #0080c7;
+	border-radius: 100px;
+	background: #0080c7;
+	color: #fff;
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 13px;
+	letter-spacing: 0.5px;
+	text-decoration: none;
+	transition: all 0.3s ease;
+}
+
+.innotech-3ds-learnmore svg {
+	width: 16px;
+	height: 16px;
+	transition: transform 0.3s ease;
+}
+
+.innotech-3ds-learnmore:hover {
+	background: #0091e0;
+	color: #fff;
+}
+
+.innotech-3ds-learnmore:hover svg {
+	transform: translateX(3px);
+}
+
 /* ── Navigation Dots ── */
 .innotech-3ds-dots {
 	display: flex;

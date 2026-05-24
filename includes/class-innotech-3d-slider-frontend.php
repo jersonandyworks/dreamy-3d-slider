@@ -16,20 +16,50 @@ class Innotech_3D_Slider_Frontend {
 		$settings = Innotech_3D_Slider_DB::get_all_settings();
 		$slides   = is_array( $settings['slides_data'] ) ? $settings['slides_data'] : array();
 
-		// Filter out slides with no image
-		$valid_slides = array();
+		// Build slide list. Use uploaded GLB if provided; otherwise mark for default fallback.
+		$has_any_model = false;
+		$normalized    = array();
 		foreach ( $slides as $slide ) {
-			if ( ! empty( $slide['image_url'] ) ) {
-				$valid_slides[] = array(
-					'image'    => esc_url( $slide['image_url'] ),
-					'title'    => esc_html( $slide['title'] ),
-					'subtitle' => esc_html( $slide['subtitle'] ),
-				);
+			$model = isset( $slide['model_url'] ) ? trim( $slide['model_url'] ) : '';
+			if ( $model ) {
+				$has_any_model = true;
+			}
+			$normalized[] = array(
+				'model'    => $model,
+				'image'    => isset( $slide['image_url'] ) ? esc_url( $slide['image_url'] ) : '',
+				'title'    => isset( $slide['title'] ) ? esc_html( $slide['title'] ) : '',
+				'subtitle' => isset( $slide['subtitle'] ) ? esc_html( $slide['subtitle'] ) : '',
+				'link'     => isset( $slide['link_url'] ) ? esc_url( $slide['link_url'] ) : '',
+			);
+		}
+
+		// Default cmap models when no uploads exist anywhere.
+		$cmap_url = INNOTECH_3DS_PLUGIN_URL . 'assets/cmap/';
+		$defaults = array(
+			array( 'model' => $cmap_url . 'cmap_box.glb',     'title' => 'CMAP Box',      'subtitle' => '' ),
+			array( 'model' => $cmap_url . 'cmap_sensor1.glb', 'title' => 'CMAP Sensor 1', 'subtitle' => '' ),
+			array( 'model' => $cmap_url . 'cmap_sensor2.glb', 'title' => 'CMAP Sensor 2', 'subtitle' => '' ),
+			array( 'model' => $cmap_url . 'sense.glb',        'title' => 'Sense',         'subtitle' => '' ),
+		);
+
+		if ( empty( $normalized ) ) {
+			// Nothing configured at all — show pure defaults.
+			$valid_slides = $defaults;
+		} else {
+			// Keep user's title/subtitle/link; fill any missing model from defaults.
+			$valid_slides = array();
+			$di           = 0;
+			foreach ( $normalized as $s ) {
+				if ( ! $s['model'] ) {
+					$s['model'] = $defaults[ $di % count( $defaults ) ]['model'];
+					$di++;
+				}
+				$valid_slides[] = $s;
 			}
 		}
 
 		if ( empty( $valid_slides ) ) {
-			return '<p style="text-align:center;color:#888;padding:40px;">No slides configured. Please add images in Settings &gt; InnoTECHT 3D Slider.</p>';
+			return '<p style="text-align:center;color:#888;padding:40px;">No slides configured.</p>';
 		}
 
 		// Enqueue assets
@@ -40,16 +70,9 @@ class Innotech_3D_Slider_Frontend {
 			INNOTECH_3DS_VERSION
 		);
 		wp_enqueue_script(
-			'three-js',
-			'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js',
+			'innotech-3ds-glb-js',
+			INNOTECH_3DS_PLUGIN_URL . 'assets/js/glb-slider.js',
 			array(),
-			'0.160.0',
-			true
-		);
-		wp_enqueue_script(
-			'innotech-3ds-slider-js',
-			INNOTECH_3DS_PLUGIN_URL . 'assets/js/threeDslider.js',
-			array( 'three-js' ),
 			INNOTECH_3DS_VERSION,
 			true
 		);
@@ -78,22 +101,21 @@ class Innotech_3D_Slider_Frontend {
 			'opacityMin'     => floatval( $settings['opacity_min'] ),
 			'particleCount'  => intval( $settings['particle_count'] ),
 			'particleColor'  => $pc_int,
-			'bgColor'        => $bg_int,
+			// 'bgColor'        => $bg_int,
 			'dragCursorUrl'  => esc_url( INNOTECH_3DS_PLUGIN_URL . 'assets/images/drag.png' ),
 		);
-
-		wp_localize_script( 'innotech-3ds-slider-js', 'innotech3DSConfig', $config );
 
 		$container_id = esc_attr( $config['containerId'] );
 		$height       = esc_attr( $settings['slider_height'] );
 		$total        = count( $valid_slides );
+		$config_json  = wp_json_encode( $config );
 
 		$show_counter = $settings['show_counter'] === '1';
 		$show_arrows  = $settings['show_arrows'] === '1';
 
 		ob_start();
 		?>
-		<div class="innotech-3ds-container" id="<?php echo $container_id; ?>" style="height:<?php echo $height; ?>;">
+		<div class="innotech-3ds-container" id="<?php echo $container_id; ?>" style="height:<?php echo $height; ?>;" data-innotech-config="<?php echo esc_attr( $config_json ); ?>">
 			<canvas class="innotech-3ds-canvas"></canvas>
 
 			<div class="innotech-3ds-loading">
@@ -122,6 +144,7 @@ class Innotech_3D_Slider_Frontend {
 			<div class="innotech-3ds-info">
 				<h2 class="innotech-3ds-title"></h2>
 				<p class="innotech-3ds-subtitle"></p>
+				<a class="innotech-3ds-learnmore" href="#" target="_blank" rel="noopener" style="display:none;"><span>Learn More</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></a>
 				<div class="innotech-3ds-dots"></div>
 			</div>
 		</div>
