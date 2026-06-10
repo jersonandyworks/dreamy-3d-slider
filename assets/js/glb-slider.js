@@ -1,6 +1,7 @@
 import * as THREE from "https://esm.sh/three@0.160.0";
 import { GLTFLoader } from "https://esm.sh/three@0.160.0/examples/jsm/loaders/GLTFLoader.js";
 import { RoomEnvironment } from "https://esm.sh/three@0.160.0/examples/jsm/environments/RoomEnvironment.js";
+import { attachDragCursor } from "./drag-cursor.js";
 
 function showError(container, msg) {
 	console.error("[innotech-3ds]", msg);
@@ -26,6 +27,7 @@ function initSlider(container) {
 	const titleEl = container.querySelector(".innotech-3ds-title");
 	const subtitleEl = container.querySelector(".innotech-3ds-subtitle");
 	const learnMoreEl = container.querySelector(".innotech-3ds-learnmore");
+	const dragCursorEl = container.querySelector(".innotech-3ds-drag-cursor");
 	const dotsWrap = container.querySelector(".innotech-3ds-dots");
 	const counterCurEl = container.querySelector(".innotech-3ds-current");
 	const prevBtn = container.querySelector(".innotech-3ds-prev");
@@ -331,6 +333,9 @@ function initSlider(container) {
 	}
 	new ResizeObserver(resize).observe(canvas);
 	resize();
+
+	// Drag cursor follows mouse within container.
+	attachDragCursor(container, dragCursorEl, document);
 
 	updateUI();
 

@@ -203,16 +203,15 @@
 /* ── Drag Cursor ── */
 .innotech-3ds-drag-cursor {
 	position: absolute;
-	top: 50%;
-	left: 50%;
+	top: 0;
+	left: 0;
 	width: 80px;
 	height: auto;
-	transform: translate(-50%, -50%);
 	z-index: 10;
 	pointer-events: none;
-	opacity: 1;
-	transition: opacity 0.4s ease;
-	will-change: left, top;
+	opacity: 0;
+	transition: opacity 0.3s ease;
+	will-change: transform;
 }
 
 .innotech-3ds-container.dragging .innotech-3ds-drag-cursor {
